@@ -53,7 +53,7 @@ pub fn run_command(program: &str, args: &[&str]) -> String {
     // TODO: Set stdout to Stdio::piped()
     // TODO: Execute with .output() and get output
     // TODO: Convert stdout to String and return
-    todo!()
+    String::from_utf8(Command::new(program).args(args).output().unwrap().stdout).unwrap()
 }
 
 /// Write data to child process (cat) stdin via pipe and read its stdout output.
@@ -89,7 +89,18 @@ pub fn pipe_through_cat(input: &str) -> String {
     // TODO: Write input to child process stdin
     // TODO: Drop stdin to close pipe (otherwise cat won't exit)
     // TODO: Read output from child process stdout
-    todo!()
+    let handle = Command::new("cat")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    handle.stdin.unwrap().write_all(input.as_bytes());
+
+    let mut result = String::new();
+    handle.stdout.unwrap().read_to_string(&mut result);
+
+    result
 }
 
 /// Get child process exit code.
@@ -107,10 +118,7 @@ pub fn pipe_through_cat(input: &str) -> String {
 /// 3. Use `.code()` to get the exit code as `Option<i32>`.
 /// 4. If the child terminated normally, return the exit code; otherwise return a default.
 pub fn get_exit_code(command: &str) -> i32 {
-    // TODO: Use Command::new("sh").args(["-c", command])
-    // TODO: Execute and get status
-    // TODO: Return exit code
-    todo!()
+    Command::new(command).status().unwrap().code().unwrap()
 }
 
 /// Execute the given shell command and return its stdout output as a `Result`.
@@ -137,7 +145,7 @@ pub fn run_command_with_result(program: &str, args: &[&str]) -> io::Result<Strin
     // TODO: Set stdout to Stdio::piped()
     // TODO: Execute with .output() and handle Result
     // TODO: Convert stdout to String with from_utf8, mapping errors to io::Error
-    todo!()
+    Ok(String::from_utf8(Command::new(program).args(args).output()?.stdout).unwrap())
 }
 
 /// Interact with `grep` via bidirectional pipes, filtering lines that contain a pattern.
@@ -167,7 +175,24 @@ pub fn pipe_through_grep(pattern: &str, input: &str) -> String {
     // TODO: Drop stdin to close pipe
     // TODO: Read output from child stdout line by line
     // TODO: Collect and return matching lines
-    todo!()
+    let mut handle = Command::new("grep")
+        .arg(pattern)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let mut stdin = handle.stdin.as_mut().unwrap();
+    let mut stdout = handle.stdout.as_mut().unwrap();
+    for line in input.split('\n') {
+        stdin.write_all(format!("{}\n", line).as_bytes());
+    }
+    drop(handle.stdin.unwrap());
+
+    let mut result = String::new();
+    stdout.read_to_string(&mut result);
+
+    result
 }
 
 #[cfg(test)]

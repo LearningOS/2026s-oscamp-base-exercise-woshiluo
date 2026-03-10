@@ -62,7 +62,8 @@ impl TaskContext {
     /// - Set `sp = stack_top` with 16-byte alignment (RISC-V ABI requires 16-byte aligned stack at function entry).
     /// - Leave `s0`–`s11` zero; they will be loaded on switch.
     pub fn init(&mut self, stack_top: usize, entry: usize) {
-        todo!("set ra = entry, sp = stack_top (16-byte aligned)")
+        self.ra = entry as u64;
+        self.sp = stack_top as u64;
     }
 }
 
@@ -71,16 +72,66 @@ impl TaskContext {
 /// In asm: store `sp`, `ra`, `s0`–`s11` to `[a0]` (old), load from `[a1]` (new), zero `a0`/`a1` so we do not leak pointers into the new context, then `ret`.
 ///
 /// Must be `#[unsafe(naked)]` to prevent the compiler from generating a prologue/epilogue.
-pub unsafe fn switch_context(old: &mut TaskContext, new: &TaskContext) {
-    todo!("save callee-saved regs to old, load from new, then ret; use #[unsafe(naked)] + naked_asm!, see module doc for riscv64 ABI and layout")
+#[unsafe(naked)]
+pub unsafe extern "C" fn switch_context(old: &mut TaskContext, new: &TaskContext) {
+    core::arch::naked_asm!(
+        "sd sp, 0*8(a0)",
+        "sd ra, 1*8(a0)",
+        "sd s0, 2*8(a0)",
+        "sd s1, 3*8(a0)",
+        "sd s2, 4*8(a0)",
+        "sd s3, 5*8(a0)",
+        "sd s4, 6*8(a0)",
+        "sd s5, 7*8(a0)",
+        "sd s6, 8*8(a0)",
+        "sd s7, 9*8(a0)",
+        "sd s8, 10*8(a0)",
+        "sd s9, 11*8(a0)",
+        "sd s10, 12*8(a0)",
+        "sd s11, 13*8(a0)",
+        "ld sp, 0*8(a1)",
+        "ld ra, 1*8(a1)",
+        "ld s0, 2*8(a1)",
+        "ld s1, 3*8(a1)",
+        "ld s2, 4*8(a1)",
+        "ld s3, 5*8(a1)",
+        "ld s4, 6*8(a1)",
+        "ld s5, 7*8(a1)",
+        "ld s6, 8*8(a1)",
+        "ld s7, 9*8(a1)",
+        "ld s8, 10*8(a1)",
+        "ld s9, 11*8(a1)",
+        "ld s10, 12*8(a1)",
+        "ld s11, 13*8(a1)",
+        "add a0, zero, zero",
+        "add a1, zero, zero",
+        "ret"
+    );
 }
 
 const STACK_SIZE: usize = 1024 * 64;
+#[repr(align(16))]
+struct StackData {
+    data: [u8; STACK_SIZE],
+}
+
+impl StackData {
+    fn new() -> Self {
+        Self {
+            data: [0; STACK_SIZE],
+        }
+    }
+}
 
 /// Allocate a stack for a coroutine. Returns `(buffer, stack_top)` where `stack_top` is the high address
 /// (stack grows down). The buffer must be kept alive for the lifetime of the context using this stack.
 pub fn alloc_stack() -> (Vec<u8>, usize) {
-    todo!("allocate stack buffer, return (buffer, stack_top) with stack_top 16-byte aligned")
+    let result = Box::new(StackData::new());
+    let result = Box::leak(result);
+    let start_address = result.data.to_vec().as_ptr() as usize;
+    let end_address = start_address + STACK_SIZE;
+
+    (result.data.to_vec(), end_address)
 }
 
 #[cfg(test)]
